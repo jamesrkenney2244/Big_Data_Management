@@ -1,0 +1,1 @@
+wget --output-document "fullDelisted.csv" "https://www.alphavantage.co/query?function=LISTING_STATUS&date=2021-03-05&state=delisted&apikey=J8QDS6G2JVLXMA4Z" cat fullDelisted.csv | sed "1d" | awk -F ',' '{print $1}' > 'delisted.csv'
