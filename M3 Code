@@ -1,0 +1,49 @@
+#loanding avdata
+
+# pyspark.sql
+from pyspark.sql import SparkSession, SQLContext
+import pyspark.sql.functions as fun
+from pyspark.sql.types import StructType, StructField, StringType, FloatType, DoubleType, IntegerType, BooleanType
+from pyspark.sql.window import Window
+
+# set up the SparkSession
+spark = SparkSession.builder \
+  .master("local") \
+  .config('spark.master', 'local[4]') \
+  .config('spark.executor.memory', '4g') \
+  .config('spark.app.name', 'avdata') \
+  .config('spark.cores.max', '4') \
+  .config('spark.driver.memory','16g') \
+  .getOrCreate()
+df = spark.read.format("csv"). \
+  options(header='True',inferSchema='True'). \
+  load("avdata/*")
+df.printSchema()
+
+# get sourcefile name from input_file_name()
+df = df.withColumn("path", fun.input_file_name())
+regex_str = "[\/]([^\/]+[^\/]+)$" #regex to extract text after the last / or \
+df = df.withColumn("ticker", fun.regexp_extract("path",regex_str,1))
+df = df.na.drop()
+df.show()
+
+# extract year
+dfy = df.withColumn('year', fun.year("timestamp"))
+
+# subest by years 2020 and 2021
+dfyc = dfy[dfy.year.isin(years)]
+
+# perform sampling on dfyc
+dfycs = dfyc.sample(0.50)
+
+# perform binning on volume 
+
+from pyspark.ml.feature import Bucketizer
+
+bucketizer = Bucketizer(splits=[ 0, 1000000, 10000000, 100000000, float('Inf') ],inputCol="volume", outputCol="vbuckets")
+dfycsb = bucketizer.setHandleInvalid("keep").transform(dfycs)
+
+dfycsb.show()
+
+# log transform volume
+?
