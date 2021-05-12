@@ -1,3 +1,5 @@
+python3
+
 #loanding avdata
 
 # pyspark.sql
@@ -31,6 +33,9 @@ df.show()
 dfy = df.withColumn('year', fun.year("timestamp"))
 
 # subest by years 2020 and 2021
+
+years = [2020, 2021]
+dfy.year.isin(years)
 dfyc = dfy[dfy.year.isin(years)]
 
 # perform sampling on dfyc
@@ -43,7 +48,14 @@ from pyspark.ml.feature import Bucketizer
 bucketizer = Bucketizer(splits=[ 0, 1000000, 10000000, 100000000, float('Inf') ],inputCol="volume", outputCol="vbuckets")
 dfycsb = bucketizer.setHandleInvalid("keep").transform(dfycs)
 
-dfycsb.show()
 
-# log transform volume
-?
+# outliers - need to tweek this to work properly - there was an attempt
+statsDF = dfycs.groupBy("volume").agg(fun.mean(dfycs.volume).alias("mean"),fun.stddev(dfycs.volume).alias("stddev"))
+
+statsDF = statsDF.withColumn("UpperLimit", statsDF.mean + statsDF.stddev * 3).withColumn("LowerLimit", statsDF.mean - statsDF.stddev * 3)
+statsDF = statsDF.withColumnRenamed("volume", "statsvolume")
+statsDF = statsDF.na.drop()
+statsDF.show()
+
+joinDF = dfycs.join(statsDF, dfycs.volume == statsDF.statsvolume)
+joinDF = joinDF.na.drop()
