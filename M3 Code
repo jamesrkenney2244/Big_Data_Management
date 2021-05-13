@@ -30,6 +30,10 @@ df = df.na.drop()
 df.show()
 
 # extract year
+df = df.withColumn("path", fun.input_file_name())
+regex_str = "[\/]([^\/]+[^\/]+)$" #regex to extract text after the last / or \
+df = df.withColumn("ticker", fun.regexp_extract("path",regex_str,1))
+df = df.na.drop()
 dfy = df.withColumn('year', fun.year("timestamp"))
 
 # subest by years 2020 and 2021
@@ -41,6 +45,9 @@ dfyc = dfy[dfy.year.isin(years)]
 # perform sampling on dfyc
 dfycs = dfyc.sample(0.50)
 
+#test for nulls
+dfycs.isnull().values.any()
+
 # perform binning on volume 
 
 from pyspark.ml.feature import Bucketizer
@@ -49,13 +56,7 @@ bucketizer = Bucketizer(splits=[ 0, 1000000, 10000000, 100000000, float('Inf') ]
 dfycsb = bucketizer.setHandleInvalid("keep").transform(dfycs)
 
 
-# outliers - need to tweek this to work properly - there was an attempt
-statsDF = dfycs.groupBy("volume").agg(fun.mean(dfycs.volume).alias("mean"),fun.stddev(dfycs.volume).alias("stddev"))
+# filter for outliers - this is my best attempt for now
+statsDF = dfycs.groupBy("ticker").agg(fun.mean(dfycs.volume).alias("mean"),fun.stddev(dfycs.volume).alias("stddev"))
 
-statsDF = statsDF.withColumn("UpperLimit", statsDF.mean + statsDF.stddev * 3).withColumn("LowerLimit", statsDF.mean - statsDF.stddev * 3)
-statsDF = statsDF.withColumnRenamed("volume", "statsvolume")
-statsDF = statsDF.na.drop()
-statsDF.show()
-
-joinDF = dfycs.join(statsDF, dfycs.volume == statsDF.statsvolume)
-joinDF = joinDF.na.drop()
+statsDFO = statsDF.filter(fun.abs(fun.col("mean")-fun.col("stddev")) >= (fun.col("stddev")*3))
